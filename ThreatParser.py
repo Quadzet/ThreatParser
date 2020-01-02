@@ -160,7 +160,6 @@ class Ui_MainWindow(object):
         self.abilityTable.move(180, 450)
 
         ### FINISHING TOUCHES ###
-        #updateSelectedEvents(lr)
         self.retranslateUi(MainWindow)
         QtCore.QMetaObject.connectSlotsByName(MainWindow)
 
@@ -176,13 +175,7 @@ class Ui_MainWindow(object):
         mightBonus = self.mightBonus.isChecked()
         initialStance = self.stanceCombo.currentText()
 
-        config = logConfig()
-        config.logFilePath = logFilePath
-        config.defiance = defiance
-        config.mightBonus = bool(mightBonus)
-        config.initialStance = initialStance
-        config.playerName = "Quadzet"
-        config.server = "Golemagg"
+        config = logConfig(logFilePath, defiance, bool(mightBonus), initialStance, "Quadzet", "Golemagg")
 
         self.selectedEvents = self.data.logEvents
         parse_combat_log(logFilePath, self.data, config)

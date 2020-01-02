@@ -51,9 +51,27 @@ class logConfig:
     logFilePath = ""
     defiance = 5
     mightBonus = False
-    initialStance = "Defensive Stance"
+    stance = "Defensive Stance"
     playerName = ""
     server = ""
+
+    def __init__(self, logFilePath, defiance, mightBonus, stance, playerName, server):
+        self.logFilePath = logFilePath
+        self.defiance = defiance
+        self.mightBonus = mightBonus
+        self.stance = stance
+        self.playerName = playerName
+        self.server = server
+
+    def getThreatFactor(self, spellID):
+        factor = 0.8
+        if self.stance == "Defensive Stance":
+            factor = (1+self.defiance*0.03)*1.3
+        if spellID == 20647:
+            factor *= 1.25
+        elif spellID == 11597 and self.mightBonus:
+            factor *= 1.15 # Assuming mightbonus is multiplicative
+        return factor
 
 class logData:
     logEvents = []
@@ -71,7 +89,7 @@ def subtract_timestamps(startTime, endTime):
 def parse_dmg_event(timestamp, line, data, config):
     v_line = line.split(",")
     damage = float(v_line[25])
-    threat = damage*1.495
+    threat = damage*config.getThreatFactor(0)
     data.totalDPS += damage
     data.totalTPS += threat
 
@@ -94,7 +112,7 @@ def parse_spell_dmg_event(timestamp, line, data, config):
     elif spellID == 11567:
         bonusThreat = 145
 
-    threat = (damage+bonusThreat)*1.495
+    threat = (damage+bonusThreat)*config.getThreatFactor(spellID)
     data.totalTPS += threat
     target = v_line[6].strip('"')
     source = v_line[2].strip('"')
@@ -106,8 +124,8 @@ def parse_dmg_shield_event(timestamp, line, data, config):
     v_line = line.split(",")
     damage = float(v_line[28])
     data.totalDPS += damage
-    data.totalTPS += damage*1.495
-    threat = damage*1.495
+    threat = damage*config.getThreatFactor(0)
+    data.totalTPS += threat
     target = v_line[6].strip('"')
     source = v_line[2].strip('"')
     spellName = v_line[10].strip('"')
@@ -120,7 +138,7 @@ def parse_spell_success_event(timestamp, line, data, config):
     bonusThreat = 0
     if spellID == 11597:
         bonusThreat = 260 #261?
-    threat = bonusThreat*1.495
+    threat = bonusThreat*config.getThreatFactor(spellID)
     data.totalTPS += threat
 
     damage = 0
@@ -129,7 +147,6 @@ def parse_spell_success_event(timestamp, line, data, config):
     spellName = v_line[10].strip('"')
     ret = threatEvent(timestamp, threat, damage, target, source, spellName)
     return ret
-
 
 def parse_spell_miss_event(timestamp, line, data, config):
     v_line = line.split(",")
@@ -137,7 +154,7 @@ def parse_spell_miss_event(timestamp, line, data, config):
     bonusThreat = 0
     if spellID == 11597:
         bonusThreat = -260 #261?
-    threat = bonusThreat*1.495
+    threat = bonusThreat*config.getThreatFactor(spellID)
     data.totalTPS += threat
 
     damage = 0
@@ -147,6 +164,15 @@ def parse_spell_miss_event(timestamp, line, data, config):
     ret = threatEvent(timestamp, threat, damage, target, source, spellName)
     return ret
 
+def parse_aura_applied_event(timestamp, line, data, config):
+    v_line = line.split(",")
+    spellID = int(v_line[9])
+    if spellID == 2457:
+        config.stance = "Battle Stance"
+    elif spellID == 2458:
+        config.stance = "Berserker Stance"
+    elif spellID == 71:
+        config.stance = "Defensive Stance"
 
 def parse_log_line(line, data, config):
     v_line = line.split("  ")
@@ -159,7 +185,7 @@ def parse_log_line(line, data, config):
     if event == "ENCOUNTER_END":
         data.encounterEnd = timestamp
         data.fightLength = subtract_timestamps(data.encounterStart, data.encounterEnd).total_seconds()
-    if event != "SWING_DAMAGE_LANDED" and event != "SPELL_DAMAGE" and event != "DAMAGE_SHIELD" and event != "SPELL_CAST_SUCCESS" and event != "SPELL_MISSED":
+    if event != "SWING_DAMAGE_LANDED" and event != "SPELL_DAMAGE" and event != "DAMAGE_SHIELD" and event != "SPELL_CAST_SUCCESS" and event != "SPELL_MISSED" and event != "SPELL_AURA_APPLIED":
         return
     source = v_line[2].strip('"')
     target = v_line[6].strip('"')
@@ -173,10 +199,12 @@ def parse_log_line(line, data, config):
             data.logEvents.append(parse_spell_dmg_event(timestampSec, line, data, config))
         elif event == "DAMAGE_SHIELD":
             data.logEvents.append(parse_dmg_shield_event(timestampSec, line, data, config))
-        elif event == "SPELL_CAST_SUCCESS": # debuffs are spell_aura_applied and applied_dose, casts are casts_success with or withour cast_fail
+        elif event == "SPELL_CAST_SUCCESS": # debuffs are spell_aura_applied and applied_dose, casts are casts_success with or without cast_fail
             data.logEvents.append(parse_spell_success_event(timestampSec, line, data, config))
         elif event == "SPELL_MISSED":
             data.logEvents.append(parse_spell_miss_event(timestampSec, line, data, config))
+        elif event == "SPELL_AURA_APPLIED": # Updates the config if a stance was changed
+            parse_aura_applied_event(timestampSec, line, data, config)
     return
 
 def parse_combat_log(filePath, data, config):
@@ -184,6 +212,6 @@ def parse_combat_log(filePath, data, config):
     for line in f:
         parse_log_line(line, data, config)
     f.close()
-    data.totalTPS = round(data.totalTPS / data.fightLength, 1) # use actual timestamp span instead later
+    data.totalTPS = round(data.totalTPS / data.fightLength, 1)
     data.totalDPS = round(data.totalDPS / data.fightLength, 1)
     return data
