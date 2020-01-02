@@ -2,14 +2,16 @@ import numpy as np
 from scipy import interpolate
 import datetime
 from datetime import datetime
+import requests
+from requests import HTTPError
 
 
 class threatEvent:
     timestamp = 0
     threat = 0
     damage = 0
-    target = ""
-    source = ""
+    targetID = 0
+    sourceID = 0
     spellName = ""
 
     def __init__(self, timestamp, threat, damage, target, source, spellName):
@@ -54,14 +56,16 @@ class logConfig:
     stance = "Defensive Stance"
     playerName = ""
     server = ""
+    report = ""
 
-    def __init__(self, logFilePath, defiance, mightBonus, stance, playerName, server):
+    def __init__(self, logFilePath, defiance, mightBonus, stance, playerName, server, report):
         self.logFilePath = logFilePath
         self.defiance = defiance
         self.mightBonus = mightBonus
         self.stance = stance
         self.playerName = playerName
         self.server = server
+        self.report = report
 
     def getThreatFactor(self, spellID):
         factor = 0.8
@@ -75,35 +79,13 @@ class logConfig:
 
 class logData:
     logEvents = []
-    fightLength = 0
+    fightLength = 419.834
     totalDPS = 0
     totalTPS = 0
-    encounterStart = ""
-    encounterEnd = ""
 
-def subtract_timestamps(startTime, endTime):
-    startDateTime = datetime.strptime(startTime, "%d/%m %H:%M:%S.%f")
-    endDateTime = datetime.strptime(endTime, "%d/%m %H:%M:%S.%f")
-    return endDateTime - startDateTime
-
-def parse_dmg_event(timestamp, line, data, config):
-    v_line = line.split(",")
-    damage = float(v_line[25])
-    threat = damage*config.getThreatFactor(0)
-    data.totalDPS += damage
-    data.totalTPS += threat
-
-    target = v_line[6].strip('"')
-    source = v_line[2].strip('"')
-    spellName = "Melee"
-    ret = threatEvent(timestamp, threat, damage, target, source, spellName)
-    return ret
-
-def parse_spell_dmg_event(timestamp, line, data, config):
-    v_line = line.split(",")
-    damage = float(v_line[28])
-    data.totalDPS += damage
-    spellID = int(v_line[9])
+def parseDamageEvent(event, config):
+    damage = event["amount"]
+    spellID = int(event["ability"]["guid"])
     bonusThreat = 0
     if spellID == 23925:
         bonusThreat = 250
@@ -111,62 +93,54 @@ def parse_spell_dmg_event(timestamp, line, data, config):
         bonusThreat = 315
     elif spellID == 11567:
         bonusThreat = 145
+    elif spellID == 11597: # Sunder Armor parry/miss/dodge shows up as damage, subtract threat since the cast has added it
+        bonusThreat = -260 #261?
 
+    timestamp = event["timestamp"]/1000
     threat = (damage+bonusThreat)*config.getThreatFactor(spellID)
-    data.totalTPS += threat
-    target = v_line[6].strip('"')
-    source = v_line[2].strip('"')
-    spellName = v_line[10].strip('"')
-    ret = threatEvent(timestamp, threat, damage, target, source, spellName)
+    targetID = int(event["targetID"])
+    if targetID != 21:
+        return
+    source = 0
+    if "sourceID" in event:
+        source = int(event["sourceID"])
+    if source != 3:
+        return
+    spellName = event["ability"]["name"]
+    ret = threatEvent(timestamp, threat, damage, targetID, source, spellName)
     return ret
 
-def parse_dmg_shield_event(timestamp, line, data, config):
-    v_line = line.split(",")
-    damage = float(v_line[28])
-    data.totalDPS += damage
-    threat = damage*config.getThreatFactor(0)
-    data.totalTPS += threat
-    target = v_line[6].strip('"')
-    source = v_line[2].strip('"')
-    spellName = v_line[10].strip('"')
-    ret = threatEvent(timestamp, threat, damage, target, source, spellName)
-    return ret
-
-def parse_spell_success_event(timestamp, line, data, config):
-    v_line = line.split(",")
-    spellID = int(v_line[9])
+def parseCastEvent(event, config):
     bonusThreat = 0
-    if spellID == 11597:
+    spellID = int(event["ability"]["guid"])
+    if  spellID == 11597:
         bonusThreat = 260 #261?
     threat = bonusThreat*config.getThreatFactor(spellID)
-    data.totalTPS += threat
 
+    if not bool(event["sourceIsFriendly"]):
+        return
+
+    timestamp = event["timestamp"]/1000
     damage = 0
-    target = v_line[6].strip('"')
-    source = v_line[2].strip('"')
-    spellName = v_line[10].strip('"')
-    ret = threatEvent(timestamp, threat, damage, target, source, spellName)
+    targetID = 0
+    if "targetID" in event:
+        targetID = event["targetID"]
+    if targetID != 21:
+        return
+    source = int(event["sourceID"])
+    if source != 3:
+        return
+    spellName = event["ability"]["name"]
+    ret = threatEvent(timestamp, threat, damage, targetID, source, spellName)
     return ret
 
-def parse_spell_miss_event(timestamp, line, data, config):
-    v_line = line.split(",")
-    spellID = int(v_line[9])
-    bonusThreat = 0
-    if spellID == 11597:
-        bonusThreat = -260 #261?
-    threat = bonusThreat*config.getThreatFactor(spellID)
-    data.totalTPS += threat
-
-    damage = 0
-    target = v_line[6].strip('"')
-    source = v_line[2].strip('"')
-    spellName = v_line[10].strip('"')
-    ret = threatEvent(timestamp, threat, damage, target, source, spellName)
-    return ret
-
-def parse_aura_applied_event(timestamp, line, data, config):
-    v_line = line.split(",")
-    spellID = int(v_line[9])
+def parseApplyBuffEvent(event, config):
+    spellID = int(event["ability"]["guid"])
+    source = 0
+    if "sourceID" in event:
+        source = int(event["sourceID"])
+    if source != 3:
+        return
     if spellID == 2457:
         config.stance = "Battle Stance"
     elif spellID == 2458:
@@ -174,44 +148,40 @@ def parse_aura_applied_event(timestamp, line, data, config):
     elif spellID == 71:
         config.stance = "Defensive Stance"
 
-def parse_log_line(line, data, config):
-    v_line = line.split("  ")
-    timestamp = v_line[0]
-    line = v_line[1]
-    v_line = line.split(",")
-    event = v_line[0]
-    if event == "ENCOUNTER_START":
-        data.encounterStart = timestamp
-    if event == "ENCOUNTER_END":
-        data.encounterEnd = timestamp
-        data.fightLength = subtract_timestamps(data.encounterStart, data.encounterEnd).total_seconds()
-    if event != "SWING_DAMAGE_LANDED" and event != "SPELL_DAMAGE" and event != "DAMAGE_SHIELD" and event != "SPELL_CAST_SUCCESS" and event != "SPELL_MISSED" and event != "SPELL_AURA_APPLIED":
-        return
-    source = v_line[2].strip('"')
-    target = v_line[6].strip('"')
-    if source != config.playerName + "-" + config.server or target != "Onyxia":
-        return
-    else:
-        timestampSec = subtract_timestamps(data.encounterStart, timestamp).total_seconds()
-        if event == "SWING_DAMAGE_LANDED":
-            data.logEvents.append(parse_dmg_event(timestampSec, line, data, config))
-        elif event == "SPELL_DAMAGE":
-            data.logEvents.append(parse_spell_dmg_event(timestampSec, line, data, config))
-        elif event == "DAMAGE_SHIELD":
-            data.logEvents.append(parse_dmg_shield_event(timestampSec, line, data, config))
-        elif event == "SPELL_CAST_SUCCESS": # debuffs are spell_aura_applied and applied_dose, casts are casts_success with or without cast_fail
-            data.logEvents.append(parse_spell_success_event(timestampSec, line, data, config))
-        elif event == "SPELL_MISSED":
-            data.logEvents.append(parse_spell_miss_event(timestampSec, line, data, config))
-        elif event == "SPELL_AURA_APPLIED": # Updates the config if a stance was changed
-            parse_aura_applied_event(timestampSec, line, data, config)
-    return
+def fetchEvents(data, config):
+    url = "https://www.warcraftlogs.com:443/v1/report/events/summary/" + config.report #QKnRY3gjtCpZWrMm
+    parameters = {
+        "api_key": "7c4302d055d8d0f8f0092b04e4be957c",
+        "fight": "last",
+        "start": "0",
+        "end": "500000",
+        "sourceid": "3"
+    }
+    events = []
+    try:
+        response = requests.get(url, params=parameters)
+        events = response.json()["events"]
+        response.raise_for_status()
+    except HTTPError as http_err:
+        print(f'HTTP error occurred: {http_err}')
+    except Exception as err:
+        print(f'Other error occurred: {err}')
 
-def parse_combat_log(filePath, data, config):
-    f = open(filePath, "r")
-    for line in f:
-        parse_log_line(line, data, config)
-    f.close()
-    data.totalTPS = round(data.totalTPS / data.fightLength, 1)
-    data.totalDPS = round(data.totalDPS / data.fightLength, 1)
+    threatEvents = []
+    for event in events:
+        threatInstance = None
+        if event["type"] == "cast":
+            threatInstance = parseCastEvent(event, config)
+        elif event["type"] == "damage":
+            threatInstance = parseDamageEvent(event, config)
+        elif event["type"] == "applybuff":
+            parseApplyBuffEvent(event, config) # update config regarding stances
+        if threatInstance is None:
+            continue
+        else:
+            threatEvents.append(threatInstance)
+
+    data.logEvents = threatEvents
+    data.totalDPS = round(sum([item.damage for item in data.logEvents])/419.834, 1)
+    data.totalTPS = round(sum([item.threat for item in data.logEvents])/419.834, 1)
     return data

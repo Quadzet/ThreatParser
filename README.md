@@ -4,7 +4,9 @@ Warrior tank threat parser for classic wow
 
 
 TODO:
- - Implement initial stance, defiance, might bonus, execute
+ - Fetch report info and allow picking fight/player
+ - Rage gains, Gift of Arthas, battle shout
  - Manual selection input, button for snug fit
- - Use wcl
+ - Graph granularity option(s)
+ - Fix table sorting
 

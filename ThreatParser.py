@@ -16,6 +16,8 @@ def myGetQTableWidgetSize(t):
 class Ui_MainWindow(object):
     # Updates the selected TPS/DPS as well as the table values
     def updateSelectedValues(self):
+        if (len(self.selectedEvents) == 0):
+            return
         threat = sum([item.threat for item in self.selectedEvents])
         damage = sum([item.damage for item in self.selectedEvents])
         time = self.selectedEvents[-1].timestamp - self.selectedEvents[0].timestamp
@@ -25,7 +27,7 @@ class Ui_MainWindow(object):
         self.abilityTable.resize(1010, 300)
         abilityTuples = []
         for event in self.selectedEvents:
-            if event.spellName in [item[0] for item in abilityTuples]: # use the 'in' keyword?
+            if event.spellName in [item[0] for item in abilityTuples]:
                 abilityTuple = [item for item in abilityTuples if item[0] == event.spellName][0]
                 abilityTuple[1] += event.damage
                 abilityTuple[2] += event.threat
@@ -59,7 +61,6 @@ class Ui_MainWindow(object):
                 break
             if event.timestamp > startPoint:
                 self.selectedEvents.append(event)
-                self.selectedEvents.append(event)
         self.updateSelectedValues()
         return
 
@@ -86,13 +87,12 @@ class Ui_MainWindow(object):
 
         self.logFileDesc = QtWidgets.QLabel(self.centralwidget)
         self.logFileDesc.setGeometry(QtCore.QRect(10, 10, 160, 20))
-        self.logFileDesc.setText("Combatlog file path:")
+        self.logFileDesc.setText("Warcraftlogs Report ID:")
 
 
         self.LogFilePath = QtWidgets.QLineEdit(self.centralwidget)
         self.LogFilePath.setGeometry(QtCore.QRect(10, 35, 160, 20))
-        self.LogFilePath.setText("C:\Code\git\ThreatParser\OnyPostHotfix.txt")
-        #self.LogFilePath.setPlaceholderText("Combatlog File Path")
+        self.LogFilePath.setText("QKnRY3gjtCpZWrMm")
         self.LogFilePath.setObjectName("LogFilePath")
 
         self.mightBonus = QtWidgets.QCheckBox("8/8 Might Bonus", self.centralwidget)
@@ -132,13 +132,14 @@ class Ui_MainWindow(object):
         self.pen = pg.mkPen(color='9a8bb0', width=7)
         self.threatGraph.resize(0,0)
         self.threatGraph.move(0,0)
+        self.plot = self.threatGraph.plot([0], [0], pen=self.pen)
 
 
 
-        lr = pg.LinearRegionItem([0, 200])
-        lr.setZValue(-10)
-        self.threatGraph.addItem(lr)
-        lr.sigRegionChangeFinished.connect(self.updateSelectedEvents)
+        self.lr = pg.LinearRegionItem([0, 200])
+        self.lr.setZValue(-10)
+        self.threatGraph.addItem(self.lr)
+        self.lr.sigRegionChangeFinished.connect(self.updateSelectedEvents)
 
         self.totalTPS = QtWidgets.QLabel(self.centralwidget)
         self.totalTPS.setGeometry(180, 400, 260, 24)
@@ -171,24 +172,21 @@ class Ui_MainWindow(object):
     # Main function
     def recalc(self):
         logFilePath = self.LogFilePath.text()
+        report = logFilePath
         defiance = int(self.defianceCombo.currentText()[0])
         mightBonus = self.mightBonus.isChecked()
         initialStance = self.stanceCombo.currentText()
 
-        config = logConfig(logFilePath, defiance, bool(mightBonus), initialStance, "Quadzet", "Golemagg")
+        config = logConfig(logFilePath, defiance, bool(mightBonus), initialStance, "Quadzet", "Golemagg", report)
 
-        self.selectedEvents = self.data.logEvents
-        parse_combat_log(logFilePath, self.data, config)
+        fetchEvents(self.data, config)
         x, y = generatePlotVectors(self.data.logEvents)
         self.threatGraph.resize(1010,360)
         self.threatGraph.move(180, 10)
-        self.threatGraph.plot(x, y, pen=self.pen)
-
+        self.plot.setData(x, y)
         self.totalTPS.setText("Threat per Second: " + str(self.data.totalTPS))
         self.totalDPS.setText("Damage per Second: " + str(self.data.totalDPS))
-
-        self.updateSelectedValues()
-
+        self.updateSelectedEvents(self.lr)
 
 if __name__ == "__main__":
     import sys
