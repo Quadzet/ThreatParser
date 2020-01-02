@@ -20,32 +20,36 @@ class Ui_MainWindow(object):
             return
         threat = sum([item.threat for item in self.selectedEvents])
         damage = sum([item.damage for item in self.selectedEvents])
-        time = self.selectedEvents[-1].timestamp - self.selectedEvents[0].timestamp
+        startPoint, endPoint = self.lr.getRegion()
+        time = endPoint - startPoint
         self.selectedTPS.setText("Selected Threat per Second: " + str(round(threat/time, 1)))
         self.selectedDPS.setText("Selected Damage per Second: " + str(round(damage/time, 1)))
 
         self.abilityTable.resize(1010, 300)
         abilityTuples = []
+        totalThreat = 0
         for event in self.selectedEvents:
             if event.spellName in [item[0] for item in abilityTuples]:
                 abilityTuple = [item for item in abilityTuples if item[0] == event.spellName][0]
                 abilityTuple[1] += event.damage
                 abilityTuple[2] += event.threat
+                totalThreat += event.threat
             else:
                 abilityTuples.append([event.spellName, event.damage, event.threat])
+                totalThreat += event.threat
         self.abilityTable.setRowCount(len(abilityTuples)+1)
         sorted(abilityTuples, key=lambda abilityTuples: abilityTuples[2])
         ix = 0
         for i in abilityTuples:
             self.abilityTable.setItem(ix, 0, QtWidgets.QTableWidgetItem(i[0]))
-            self.abilityTable.setItem(ix, 1, QtWidgets.QTableWidgetItem(str(round(i[1]/self.data.fightLength, 1))))
-            self.abilityTable.setItem(ix, 2, QtWidgets.QTableWidgetItem(str(round(i[2]/self.data.fightLength, 1))))
-            self.abilityTable.setItem(ix, 3, QtWidgets.QTableWidgetItem(str(round(i[2]*100/(self.data.fightLength*self.data.totalTPS), 1)) + "%"))
+            self.abilityTable.setItem(ix, 1, QtWidgets.QTableWidgetItem(str(round(i[1]/time, 1))))
+            self.abilityTable.setItem(ix, 2, QtWidgets.QTableWidgetItem(str(round(i[2]/time, 1))))
+            self.abilityTable.setItem(ix, 3, QtWidgets.QTableWidgetItem(str(round(i[2]*100/totalThreat, 1)) + "%"))
             ix += 1
         self.abilityTable.setItem(ix, 0, QtWidgets.QTableWidgetItem("Total"))
-        self.abilityTable.setItem(ix, 1, QtWidgets.QTableWidgetItem(str(round(sum([item[1] for item in abilityTuples])/self.data.fightLength, 1))))
-        self.abilityTable.setItem(ix, 2, QtWidgets.QTableWidgetItem(str(round(sum([item[2] for item in abilityTuples])/self.data.fightLength, 1))))
-        self.abilityTable.setItem(ix, 3, QtWidgets.QTableWidgetItem(str(round(sum([item[2] for item in abilityTuples])*100/(self.data.fightLength*self.data.totalTPS), 1)) + "%"))
+        self.abilityTable.setItem(ix, 1, QtWidgets.QTableWidgetItem(str(round(sum([item[1] for item in abilityTuples])/time, 1))))
+        self.abilityTable.setItem(ix, 2, QtWidgets.QTableWidgetItem(str(round(sum([item[2] for item in abilityTuples])/time, 1))))
+        self.abilityTable.setItem(ix, 3, QtWidgets.QTableWidgetItem(str(round(sum([item[2] for item in abilityTuples])*100/totalThreat, 1)) + "%"))
             
         self.abilityTable.resizeColumnsToContents()
         size = myGetQTableWidgetSize(self.abilityTable)
