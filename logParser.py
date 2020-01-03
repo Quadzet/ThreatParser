@@ -192,9 +192,7 @@ def fetchFightInfo(config):
 
     players = [item["name"] for item in friendlies]
     playerIDs = [item["id"] for item in friendlies]
-    #bosses = [item["name"] for item in enemies if item["type"] == "Boss"]
     bosses = [item["name"] for item in fights if item["boss"] != 0 and item["kill"] == True]
-    #bossIDs = [item["id"] for item in enemies if item["type"] == "Boss"]
     bossIDs = []
     for bossName in bosses:
         bossIDs.append([item["id"] for item in enemies if item["type"] == "Boss" and item["name"] == bossName][0])
