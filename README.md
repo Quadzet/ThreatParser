@@ -1,12 +1,19 @@
 # ThreatParser
 Warrior tank threat parser for classic wow
 
+Enter your Warcraftlogs report ID, press Fetch.
+Select the options and the tank and boss to parse.
+Voilá.
 
+ - **Note:** Only threat on the actual boss counts, ie not on adds.
 
 TODO:
- - Fetch report info and allow picking fight/player
+ - More optimized GET from warcraftlogs
+ - Filter non warrior tanks from player list
  - Rage gains, Gift of Arthas, battle shout
  - Manual selection input, button for snug fit
  - Graph granularity option(s)
+ - Dragging selection out of data should update table
+ - Clear output when a new fetch is done
  - Fix table sorting
 

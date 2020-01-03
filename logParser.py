@@ -22,15 +22,16 @@ class threatEvent:
         self.source = source
         self.spellName = spellName
 
-# TODO: fix automatic detailLevel
-def generatePlotVectors(logEvents, detailLevel=20):
+def generatePlotVectors(logEvents, config, detailLevel=0):
     timestampSeconds = []
     weights = []
+    startTime = config.startTime
+    if detailLevel==0:
+        detailLevel=round(config.fightLength/20)
     for i in logEvents:
-        timestampSeconds.append(i.timestamp)
+        timestampSeconds.append(i.timestamp - startTime)
         weights.append(i.threat)
-    endTime = timestampSeconds[-1]
-    n, x = np.histogram(timestampSeconds, range(0, round(endTime+2*detailLevel + 0.5), detailLevel), weights=weights, density=False)
+    n, x = np.histogram(timestampSeconds, range(0, round(config.fightLength + 2*detailLevel), detailLevel), weights=weights, density=False)
     n2 = [0]
     x2 = [max(0, x[0] - detailLevel/5.)]
     for i in n:
@@ -43,29 +44,33 @@ def generatePlotVectors(logEvents, detailLevel=20):
     for i in range(0, len(x2)):
         dxdy.append(0)
     poly = interpolate.CubicHermiteSpline(x2, n2, dxdy)
-    xnew = np.arange(0, 450, 0.1)
+    xnew = np.arange(0, round(config.fightLength + detailLevel), 0.1)
     ynew = []
     for i in xnew:
         ynew.append(poly(i))
     return xnew, ynew
 
-class logConfig:
-    logFilePath = ""
+class fightData:
+    report = ""
     defiance = 5
     mightBonus = False
     stance = "Defensive Stance"
-    playerName = ""
-    server = ""
-    report = ""
+    fightID = 0
+    playerID = 0
+    bossID = 0
+    fightLength = 0
+    startTime = 0
 
-    def __init__(self, logFilePath, defiance, mightBonus, stance, playerName, server, report):
-        self.logFilePath = logFilePath
+    def __init__(self, report, defiance=5, mightBonus=False, stance="Defensive Stance", fightID=0, playerID=0, bossID=0, fightLength=0, startTime = 0):
+        self.report = report
         self.defiance = defiance
         self.mightBonus = mightBonus
         self.stance = stance
-        self.playerName = playerName
-        self.server = server
-        self.report = report
+        self.fightID = fightID
+        self.playerID = playerID
+        self.bossID = bossID
+        self.fightLength = fightLength
+        self.startTime = startTime
 
     def getThreatFactor(self, spellID):
         factor = 0.8
@@ -77,9 +82,26 @@ class logConfig:
             factor *= 1.15 # Assuming mightbonus is multiplicative
         return factor
 
+class reportData:
+    players = []
+    playerIDs = []
+    bosses = []
+    bossIDs = []
+    fightIDs = []
+    fightLengths = []
+    fightStartTimes = []
+    def __init__(self, players, playerIDs, bosses, bossIDs, fightIDs, fightLengths, fightStartTimes):
+        self.players = players
+        self.playerIDs = playerIDs
+        self.bosses = bosses
+        self.bossIDs = bossIDs
+        self.fightIDs = fightIDs
+        self.fightLengths = fightLengths
+        self.fightStartTimes = fightStartTimes
+
 class logData:
+    reportData = ""
     logEvents = []
-    fightLength = 419.834
     totalDPS = 0
     totalTPS = 0
 
@@ -99,12 +121,12 @@ def parseDamageEvent(event, config):
     timestamp = event["timestamp"]/1000
     threat = (damage+bonusThreat)*config.getThreatFactor(spellID)
     targetID = int(event["targetID"])
-    if targetID != 21:
+    if targetID != config.bossID:
         return
     source = 0
     if "sourceID" in event:
         source = int(event["sourceID"])
-    if source != 3:
+    if source != config.playerID:
         return
     spellName = event["ability"]["name"]
     ret = threatEvent(timestamp, threat, damage, targetID, source, spellName)
@@ -125,10 +147,10 @@ def parseCastEvent(event, config):
     targetID = 0
     if "targetID" in event:
         targetID = event["targetID"]
-    if targetID != 21:
+    if targetID != config.bossID:
         return
     source = int(event["sourceID"])
-    if source != 3:
+    if source != config.playerID:
         return
     spellName = event["ability"]["name"]
     ret = threatEvent(timestamp, threat, damage, targetID, source, spellName)
@@ -139,7 +161,7 @@ def parseApplyBuffEvent(event, config):
     source = 0
     if "sourceID" in event:
         source = int(event["sourceID"])
-    if source != 3:
+    if source != config.playerID:
         return
     if spellID == 2457:
         config.stance = "Battle Stance"
@@ -148,14 +170,56 @@ def parseApplyBuffEvent(event, config):
     elif spellID == 71:
         config.stance = "Defensive Stance"
 
+def fetchFightInfo(config):
+    url = "https://classic.warcraftlogs.com:443/v1/report/fights/" + config.report
+    parameters = {
+        "api_key": "7c4302d055d8d0f8f0092b04e4be957c"
+    }
+    fights = []
+    friendlies = []
+    enemies = []
+    try:
+        response = requests.get(url, params=parameters)
+        response.raise_for_status()
+    except HTTPError as http_err:
+        print(f'HTTP error occurred: {http_err}')
+    except Exception as err:
+        print(f'Other error occurred: {err}')
+
+    fights = response.json()["fights"]
+    friendlies = response.json()["friendlies"]
+    enemies = response.json()["enemies"]
+
+    players = [item["name"] for item in friendlies]
+    playerIDs = [item["id"] for item in friendlies]
+    #bosses = [item["name"] for item in enemies if item["type"] == "Boss"]
+    bosses = [item["name"] for item in fights if item["boss"] != 0 and item["kill"] == True]
+    #bossIDs = [item["id"] for item in enemies if item["type"] == "Boss"]
+    bossIDs = []
+    for bossName in bosses:
+        bossIDs.append([item["id"] for item in enemies if item["type"] == "Boss" and item["name"] == bossName][0])
+    fightIDs = [item["id"] for item in fights if item["boss"] != 0 and item["kill"] == True]
+    fightStartTimes = [item["start_time"]/1000 for item in fights if item["boss"] != 0 and item["kill"] == True]
+    fightLengths = [(item["end_time"] - item["start_time"])/1000 for item in fights if item["boss"] != 0 and item["kill"] == True]
+
+    #print(players, playerIDs, bossIDs, bosses, fightIDs, fightLengths, fightStartTimes)
+
+    ret = reportData(players, playerIDs, bosses, bossIDs, fightIDs, fightLengths, fightStartTimes)
+    config.reportData = ret
+    return ret
+
+
+
+#tTyGkAbDdjLFJPwn
 def fetchEvents(data, config):
     url = "https://www.warcraftlogs.com:443/v1/report/events/summary/" + config.report #QKnRY3gjtCpZWrMm
+    #print("fight ID: " + str(config.fightID) + "  fightLength: " + str(config.fightLength) + "  playerID: " + str(config.playerID) + "  bossID: " + str(config.bossID))
     parameters = {
         "api_key": "7c4302d055d8d0f8f0092b04e4be957c",
-        "fight": "last",
-        "start": "0",
-        "end": "500000",
-        "sourceid": "3"
+        "fight": config.fightID,
+        "start": int(config.startTime*1000),#"0",
+        "end": int(config.startTime*1000 + config.fightLength*1000), #int(config.fightLength*1000),
+        "sourceid": config.playerID
     }
     events = []
     try:
@@ -167,6 +231,7 @@ def fetchEvents(data, config):
     except Exception as err:
         print(f'Other error occurred: {err}')
 
+    #print("n events: " + str(len(events)))
     threatEvents = []
     for event in events:
         threatInstance = None
@@ -180,8 +245,9 @@ def fetchEvents(data, config):
             continue
         else:
             threatEvents.append(threatInstance)
+    #print("threat events: " + str(len(threatEvents)))
 
     data.logEvents = threatEvents
-    data.totalDPS = round(sum([item.damage for item in data.logEvents])/419.834, 1)
-    data.totalTPS = round(sum([item.threat for item in data.logEvents])/419.834, 1)
+    data.totalDPS = round(sum([item.damage for item in data.logEvents])/config.fightLength, 1)
+    data.totalTPS = round(sum([item.threat for item in data.logEvents])/config.fightLength, 1)
     return data

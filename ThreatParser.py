@@ -3,6 +3,8 @@ import pyqtgraph as pg
 from pyqtgraph import PlotWidget, plot
 from logParser import *
 
+VERSION="1.0.0"
+
 # TODO MOVE THIS
 def myGetQTableWidgetSize(t):
     w = t.verticalHeader().width() + 4
@@ -61,9 +63,9 @@ class Ui_MainWindow(object):
         self.selectedEvents = []
         startPoint, endPoint = regionItem.getRegion()
         for event in self.data.logEvents:
-            if event.timestamp > endPoint:
+            if event.timestamp - self.config.startTime > endPoint:
                 break
-            if event.timestamp > startPoint:
+            if event.timestamp - self.config.startTime > startPoint:
                 self.selectedEvents.append(event)
         self.updateSelectedValues()
         return
@@ -94,41 +96,50 @@ class Ui_MainWindow(object):
         self.logFileDesc.setText("Warcraftlogs Report ID:")
 
 
-        self.LogFilePath = QtWidgets.QLineEdit(self.centralwidget)
-        self.LogFilePath.setGeometry(QtCore.QRect(10, 35, 160, 20))
-        self.LogFilePath.setText("QKnRY3gjtCpZWrMm")
-        self.LogFilePath.setObjectName("LogFilePath")
-
-        self.mightBonus = QtWidgets.QCheckBox("8/8 Might Bonus", self.centralwidget)
-        self.mightBonus.setGeometry(QtCore.QRect(10, 60, 160, 20))
-        self.mightBonus.setObjectName("MightCheckBox")
-
-        self.defianceCombo = QtWidgets.QComboBox(self.centralwidget)
-        self.defianceCombo.setGeometry(QtCore.QRect(10, 85, 160, 20))
-        self.defianceCombo.setObjectName('Defiance Rank')
-        self.defianceCombo.addItem("0/5 Defiance")
-        self.defianceCombo.addItem("1/5 Defiance")
-        self.defianceCombo.addItem("2/5 Defiance")
-        self.defianceCombo.addItem("3/5 Defiance")
-        self.defianceCombo.addItem("4/5 Defiance")
-        self.defianceCombo.addItem("5/5 Defiance")
-        self.defianceCombo.setCurrentIndex(5)
-
-        self.stanceCombo = QtWidgets.QComboBox(self.centralwidget)
-        self.stanceCombo.setGeometry(QtCore.QRect(10, 110, 160, 20))
-        self.stanceCombo.setObjectName('Initial Stance')
-        self.stanceCombo.addItem("Battle Stance")
-        self.stanceCombo.addItem("Defensive Stance")
-        self.stanceCombo.addItem("Berserker Stance")
-        self.stanceCombo.setCurrentIndex(1)
+        self.reportID = QtWidgets.QLineEdit(self.centralwidget)
+        self.reportID.setGeometry(QtCore.QRect(10, 35, 160, 20))
+        self.reportID.setText("tTyGkAbDdjLFJPwn") #tTyGkAbDdjLFJPwn QKnRY3gjtCpZWrMm
+        self.reportID.setObjectName("reportID")
 
         self.pushButton = QtWidgets.QPushButton(self.centralwidget)
-        self.pushButton.setGeometry(QtCore.QRect(110, 150, 60, 24))
+        self.pushButton.setGeometry(QtCore.QRect(110, 60, 60, 24))
         self.pushButton.setObjectName("pushButton")
-        self.pushButton.clicked.connect(self.recalc)
+        self.pushButton.clicked.connect(self.fetchShowInfo)
+        self.pushButton.setText("Fetch")#_translate("MainWindow", "Fetch"))
 
         MainWindow.setCentralWidget(self.centralwidget)
         self.data = logData()
+        self.config = ""
+
+        ### EXTRA FIGHT CONFIG ###
+        self.playerCombo = QtWidgets.QComboBox(self.centralwidget)
+        self.playerCombo.setGeometry(QtCore.QRect(0, 0, 0, 0))
+        self.playerCombo.setObjectName('Player Name')
+
+        self.fightCombo = QtWidgets.QComboBox(self.centralwidget)
+        self.fightCombo.setGeometry(QtCore.QRect(0, 0, 0, 0))
+        self.fightCombo.setObjectName('Boss Name')
+
+        self.mightBonus = QtWidgets.QCheckBox("8/8 Might Bonus", self.centralwidget)
+        self.mightBonus.setGeometry(QtCore.QRect(0, 0, 0, 0))
+        self.mightBonus.setObjectName("MightCheckBox")
+
+        self.defianceCombo = QtWidgets.QComboBox(self.centralwidget)
+        self.defianceCombo.setGeometry(QtCore.QRect(0, 0, 0, 0))
+
+        self.stanceDesc = QtWidgets.QLabel(self.centralwidget)
+        self.stanceDesc.setGeometry(QtCore.QRect(0, 0, 0, 0))
+        self.stanceDesc.setText("Initial Stance:")
+
+        self.stanceCombo = QtWidgets.QComboBox(self.centralwidget)
+        self.stanceCombo.setGeometry(QtCore.QRect(0, 0, 0, 0))
+        self.stanceCombo.setObjectName('Initial Stance')
+
+        self.fightButton = QtWidgets.QPushButton(self.centralwidget)
+        self.fightButton.setGeometry(QtCore.QRect(0, 0, 0, 0))
+        self.fightButton.setObjectName("fightButton")
+        self.fightButton.clicked.connect(self.recalc)
+        self.fightButton.setText("Calc")
 
         ### OUTPUT ###
         self.threatGraph = pg.PlotWidget(self.centralwidget)
@@ -140,7 +151,7 @@ class Ui_MainWindow(object):
 
 
 
-        self.lr = pg.LinearRegionItem([0, 200])
+        self.lr = pg.LinearRegionItem([0, 10])
         self.lr.setZValue(-10)
         self.threatGraph.addItem(self.lr)
         self.lr.sigRegionChangeFinished.connect(self.updateSelectedEvents)
@@ -169,22 +180,75 @@ class Ui_MainWindow(object):
         QtCore.QMetaObject.connectSlotsByName(MainWindow)
 
     def retranslateUi(self, MainWindow):
-        _translate = QtCore.QCoreApplication.translate
-        MainWindow.setWindowTitle(_translate("MainWindow", "Yoshi Threat Parser"))
-        self.pushButton.setText(_translate("MainWindow", "Calc"))
+        #_translate = QtCore.QCoreApplication.translate
+        MainWindow.setWindowTitle("Quadzet Threat Parser " + VERSION)#_translate("MainWindow", "Quadzet Threat Parser"))
+
+    def addFightOptions(self, reportData):
+        self.mightBonus.setGeometry(QtCore.QRect(10, 90, 160, 20))
+
+        self.defianceCombo.clear()
+        self.defianceCombo.setGeometry(QtCore.QRect(10, 115, 160, 20))
+        self.defianceCombo.setObjectName('Defiance Rank')
+        self.defianceCombo.addItem("0/5 Defiance")
+        self.defianceCombo.addItem("1/5 Defiance")
+        self.defianceCombo.addItem("2/5 Defiance")
+        self.defianceCombo.addItem("3/5 Defiance")
+        self.defianceCombo.addItem("4/5 Defiance")
+        self.defianceCombo.addItem("5/5 Defiance")
+        self.defianceCombo.setCurrentIndex(5)
+
+        self.stanceDesc.setGeometry(QtCore.QRect(10, 140, 160, 20))
+
+        self.stanceCombo.clear()
+        self.stanceCombo.setGeometry(QtCore.QRect(10, 165, 160, 20))
+        self.stanceCombo.setObjectName('Initial Stance')
+        self.stanceCombo.addItem("Battle Stance")
+        self.stanceCombo.addItem("Defensive Stance")
+        self.stanceCombo.addItem("Berserker Stance")
+        self.stanceCombo.setCurrentIndex(1)
+
+        self.playerCombo.clear()
+        self.playerCombo.setGeometry(QtCore.QRect(10, 190, 160, 20))
+        self.playerCombo.addItem("Choose Tank") # todo, filter by role
+        for name in reportData.players:
+            self.playerCombo.addItem(name)
+        self.playerCombo.setCurrentIndex(0)
+
+        self.fightCombo.clear()
+        self.fightCombo.setGeometry(QtCore.QRect(10, 215, 160, 20))
+        self.fightCombo.addItem("Choose Fight")
+        for boss in reportData.bosses:
+            self.fightCombo.addItem(boss)
+        self.fightCombo.setCurrentIndex(0)
+
+        self.fightButton.setGeometry(QtCore.QRect(110, 240, 60, 24))
+
+    # Fetch fight info (players, bosses etc) and show additional options
+    def fetchShowInfo(self):
+        reportID = self.reportID.text()
+        self.config = fightData(reportID)# bool(mightBonus), initialStance, "Quadzet", "Golemagg")
+        fetchFightInfo(self.config)
+        self.addFightOptions(self.config.reportData)
 
     # Main function
     def recalc(self):
-        logFilePath = self.LogFilePath.text()
-        report = logFilePath
-        defiance = int(self.defianceCombo.currentText()[0])
-        mightBonus = self.mightBonus.isChecked()
-        initialStance = self.stanceCombo.currentText()
+        bossIX = self.fightCombo.currentIndex()
+        playerIX = self.playerCombo.currentIndex()
+        if bossIX == 0 or playerIX == 0: # First index is "choose XYZ"
+            return
 
-        config = logConfig(logFilePath, defiance, bool(mightBonus), initialStance, "Quadzet", "Golemagg", report)
+        self.config.fightID = self.config.reportData.fightIDs[bossIX-1]
+        self.config.playerID = self.config.reportData.playerIDs[playerIX-1]
+        self.config.bossID = self.config.reportData.bossIDs[bossIX-1]
+        self.config.fightLength = self.config.reportData.fightLengths[bossIX-1]
+        self.config.startTime = self.config.reportData.fightStartTimes[bossIX-1]
+        self.config.defiance = int(self.defianceCombo.currentText()[0])
+        self.config.mightBonus = self.mightBonus.isChecked()
+        self.config.stance = self.stanceCombo.currentText()
 
-        fetchEvents(self.data, config)
-        x, y = generatePlotVectors(self.data.logEvents)
+        fetchEvents(self.data, self.config)
+        x, y = generatePlotVectors(self.data.logEvents, self.config)
+        self.lr.setRegion([0,self.config.fightLength])
         self.threatGraph.resize(1010,360)
         self.threatGraph.move(180, 10)
         self.plot.setData(x, y)
