@@ -5,6 +5,68 @@ from datetime import datetime
 import requests
 from requests import HTTPError
 
+class userConfig:
+    reportID = ""
+    defiance = 5
+    mightBonus = False
+    stance = "Defensive Stance"
+    fightID = 0
+    playerID = 0
+    bossID = 0
+    fightLength = 0
+    startTime = 0
+    def __init__(self, reportID, defiance=5, mightBonus=False, stance="Defensive Stance", fightID=0, playerID=0, bossID=0, fightLength=0, startTime = 0):
+        self.reportID = reportID
+        self.defiance = defiance
+        self.mightBonus = mightBonus
+        self.stance = stance
+        self.fightID = fightID
+        self.playerID = playerID
+        self.bossID = bossID
+        self.fightLength = fightLength
+        self.startTime = startTime
+
+    def getThreatFactor(self, spellID):
+        factor = 0.8
+        if self.stance == "Defensive Stance":
+            factor = (1+self.defiance*0.03)*1.3
+        if spellID == 20647:
+            factor *= 1.25
+        elif spellID == 11597 and self.mightBonus:
+            factor *= 1.15 # Assuming mightbonus is multiplicative
+        return factor
+
+class reportMetaData:
+    players = []
+    playerIDs = []
+    bosses = []
+    bossIDs = []
+    fightIDs = []
+    fightLengths = []
+    fightStartTimes = []
+    def __init__(self, players, playerIDs, bosses, bossIDs, fightIDs, fightLengths, fightStartTimes):
+        self.players = players
+        self.playerIDs = playerIDs
+        self.bosses = bosses
+        self.bossIDs = bossIDs
+        self.fightIDs = fightIDs
+        self.fightLengths = fightLengths
+        self.fightStartTimes = fightStartTimes
+
+# Will be used at a later stage
+class fightData:
+    threatEvents = []
+    fightID = 0
+    playerID = 0
+    bossID = 0
+    fightLength = 0
+    startTime = 0
+
+class reportData:
+    fightData = [] # all fights
+    events = [] # all events 
+    totalDPS = 0 # move/remove later
+    totalTPS = 0
 
 class threatEvent:
     timestamp = 0
@@ -13,7 +75,6 @@ class threatEvent:
     targetID = 0
     sourceID = 0
     spellName = ""
-
     def __init__(self, timestamp, threat, damage, target, source, spellName):
         self.timestamp = timestamp
         self.threat = threat
@@ -49,61 +110,6 @@ def generatePlotVectors(logEvents, config, detailLevel=0):
     for i in xnew:
         ynew.append(poly(i))
     return xnew, ynew
-
-class fightData:
-    report = ""
-    defiance = 5
-    mightBonus = False
-    stance = "Defensive Stance"
-    fightID = 0
-    playerID = 0
-    bossID = 0
-    fightLength = 0
-    startTime = 0
-
-    def __init__(self, report, defiance=5, mightBonus=False, stance="Defensive Stance", fightID=0, playerID=0, bossID=0, fightLength=0, startTime = 0):
-        self.report = report
-        self.defiance = defiance
-        self.mightBonus = mightBonus
-        self.stance = stance
-        self.fightID = fightID
-        self.playerID = playerID
-        self.bossID = bossID
-        self.fightLength = fightLength
-        self.startTime = startTime
-
-    def getThreatFactor(self, spellID):
-        factor = 0.8
-        if self.stance == "Defensive Stance":
-            factor = (1+self.defiance*0.03)*1.3
-        if spellID == 20647:
-            factor *= 1.25
-        elif spellID == 11597 and self.mightBonus:
-            factor *= 1.15 # Assuming mightbonus is multiplicative
-        return factor
-
-class reportData:
-    players = []
-    playerIDs = []
-    bosses = []
-    bossIDs = []
-    fightIDs = []
-    fightLengths = []
-    fightStartTimes = []
-    def __init__(self, players, playerIDs, bosses, bossIDs, fightIDs, fightLengths, fightStartTimes):
-        self.players = players
-        self.playerIDs = playerIDs
-        self.bosses = bosses
-        self.bossIDs = bossIDs
-        self.fightIDs = fightIDs
-        self.fightLengths = fightLengths
-        self.fightStartTimes = fightStartTimes
-
-class logData:
-    reportData = ""
-    logEvents = []
-    totalDPS = 0
-    totalTPS = 0
 
 def parseDamageEvent(event, config):
     damage = event["amount"]
@@ -171,7 +177,7 @@ def parseApplyBuffEvent(event, config):
         config.stance = "Defensive Stance"
 
 def fetchFightInfo(config):
-    url = "https://classic.warcraftlogs.com:443/v1/report/fights/" + config.report
+    url = "https://classic.warcraftlogs.com:443/v1/report/fights/" + config.reportID
     parameters = {
         "api_key": "7c4302d055d8d0f8f0092b04e4be957c"
     }
@@ -202,21 +208,17 @@ def fetchFightInfo(config):
 
     #print(players, playerIDs, bossIDs, bosses, fightIDs, fightLengths, fightStartTimes)
 
-    ret = reportData(players, playerIDs, bosses, bossIDs, fightIDs, fightLengths, fightStartTimes)
-    config.reportData = ret
+    ret = reportMetaData(players, playerIDs, bosses, bossIDs, fightIDs, fightLengths, fightStartTimes)
     return ret
 
-
-
-#tTyGkAbDdjLFJPwn
-def fetchEvents(data, config):
-    url = "https://www.warcraftlogs.com:443/v1/report/events/summary/" + config.report #QKnRY3gjtCpZWrMm
+def fetchEvents(reportData, config):
+    url = "https://www.warcraftlogs.com:443/v1/report/events/summary/" + config.reportID 
     #print("fight ID: " + str(config.fightID) + "  fightLength: " + str(config.fightLength) + "  playerID: " + str(config.playerID) + "  bossID: " + str(config.bossID))
     parameters = {
         "api_key": "7c4302d055d8d0f8f0092b04e4be957c",
         "fight": config.fightID,
-        "start": int(config.startTime*1000),#"0",
-        "end": int(config.startTime*1000 + config.fightLength*1000), #int(config.fightLength*1000),
+        "start": int(config.startTime*1000),
+        "end": int(config.startTime*1000 + config.fightLength*1000),
         "sourceid": config.playerID
     }
     events = []
@@ -245,7 +247,7 @@ def fetchEvents(data, config):
             threatEvents.append(threatInstance)
     #print("threat events: " + str(len(threatEvents)))
 
-    data.logEvents = threatEvents
-    data.totalDPS = round(sum([item.damage for item in data.logEvents])/config.fightLength, 1)
-    data.totalTPS = round(sum([item.threat for item in data.logEvents])/config.fightLength, 1)
-    return data
+    reportData.events = threatEvents
+    reportData.totalDPS = round(sum([item.damage for item in reportData.events])/config.fightLength, 1)
+    reportData.totalTPS = round(sum([item.threat for item in reportData.events])/config.fightLength, 1)
+    return reportData

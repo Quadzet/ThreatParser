@@ -62,7 +62,7 @@ class Ui_MainWindow(object):
     def updateSelectedEvents(self, regionItem):
         self.selectedEvents = []
         startPoint, endPoint = regionItem.getRegion()
-        for event in self.data.logEvents:
+        for event in self.reportData.events:
             if event.timestamp - self.config.startTime > endPoint:
                 break
             if event.timestamp - self.config.startTime > startPoint:
@@ -74,19 +74,7 @@ class Ui_MainWindow(object):
         MainWindow.setObjectName("MainWindow")
         MainWindow.resize(1200, 800)
 
-        '''lightBackgroundColor = QtGui.QColor()
-        lightBackgroundColor.setNamedColor("#ebecdd")
-        backgroundColor = QtGui.QColor()
-        backgroundColor.setNamedColor("#ebe2bb")'''
-
-        #MainWindow.setPalette(backgroundColor)
         color_palette = MainWindow.palette()
-
-        '''color_palette.setColor(QtGui.QPalette.Text, QtCore.Qt.black)
-        color_palette.setColor(QtGui.QPalette.Base, lightBackgroundColor)
-        color_palette.setColor(QtGui.QPalette.WindowText, QtCore.Qt.black)
-        color_palette.setColor(QtGui.QPalette.Window, backgroundColor)
-        MainWindow.setPalette(color_palette)'''
 
         self.centralwidget = QtWidgets.QWidget(MainWindow)
         self.centralwidget.setObjectName("centralwidget")
@@ -98,17 +86,20 @@ class Ui_MainWindow(object):
 
         self.reportID = QtWidgets.QLineEdit(self.centralwidget)
         self.reportID.setGeometry(QtCore.QRect(10, 35, 160, 20))
-        self.reportID.setText("tTyGkAbDdjLFJPwn") #tTyGkAbDdjLFJPwn QKnRY3gjtCpZWrMm
+        self.reportID.setText("tTyGkAbDdjLFJPwn")
         self.reportID.setObjectName("reportID")
 
         self.pushButton = QtWidgets.QPushButton(self.centralwidget)
         self.pushButton.setGeometry(QtCore.QRect(110, 60, 60, 24))
         self.pushButton.setObjectName("pushButton")
         self.pushButton.clicked.connect(self.fetchShowInfo)
-        self.pushButton.setText("Fetch")#_translate("MainWindow", "Fetch"))
+        self.pushButton.setText("Fetch")
 
         MainWindow.setCentralWidget(self.centralwidget)
-        self.data = logData()
+
+        ### IMPORTANT CLASS OBJECTS ###
+        self.reportData = reportData()
+        self.reportMetaData = ""
         self.config = ""
 
         ### EXTRA FIGHT CONFIG ###
@@ -180,8 +171,7 @@ class Ui_MainWindow(object):
         QtCore.QMetaObject.connectSlotsByName(MainWindow)
 
     def retranslateUi(self, MainWindow):
-        #_translate = QtCore.QCoreApplication.translate
-        MainWindow.setWindowTitle("Quadzet Threat Parser " + VERSION)#_translate("MainWindow", "Quadzet Threat Parser"))
+        MainWindow.setWindowTitle("Quadzet Threat Parser " + VERSION)
 
     def addFightOptions(self, reportData):
         self.mightBonus.setGeometry(QtCore.QRect(10, 90, 160, 20))
@@ -226,9 +216,9 @@ class Ui_MainWindow(object):
     # Fetch fight info (players, bosses etc) and show additional options
     def fetchShowInfo(self):
         reportID = self.reportID.text()
-        self.config = fightData(reportID)# bool(mightBonus), initialStance, "Quadzet", "Golemagg")
-        fetchFightInfo(self.config)
-        self.addFightOptions(self.config.reportData)
+        self.config = userConfig(reportID)
+        self.reportMetaData = fetchFightInfo(self.config)
+        self.addFightOptions(self.reportMetaData)
 
     # Main function
     def recalc(self):
@@ -237,23 +227,23 @@ class Ui_MainWindow(object):
         if bossIX == 0 or playerIX == 0: # First index is "choose XYZ"
             return
 
-        self.config.fightID = self.config.reportData.fightIDs[bossIX-1]
-        self.config.playerID = self.config.reportData.playerIDs[playerIX-1]
-        self.config.bossID = self.config.reportData.bossIDs[bossIX-1]
-        self.config.fightLength = self.config.reportData.fightLengths[bossIX-1]
-        self.config.startTime = self.config.reportData.fightStartTimes[bossIX-1]
+        self.config.fightID = self.reportMetaData.fightIDs[bossIX-1]
+        self.config.playerID = self.reportMetaData.playerIDs[playerIX-1]
+        self.config.bossID = self.reportMetaData.bossIDs[bossIX-1]
+        self.config.fightLength = self.reportMetaData.fightLengths[bossIX-1]
+        self.config.startTime = self.reportMetaData.fightStartTimes[bossIX-1]
         self.config.defiance = int(self.defianceCombo.currentText()[0])
         self.config.mightBonus = self.mightBonus.isChecked()
         self.config.stance = self.stanceCombo.currentText()
 
-        fetchEvents(self.data, self.config)
-        x, y = generatePlotVectors(self.data.logEvents, self.config)
+        fetchEvents(self.reportData, self.config)
+        x, y = generatePlotVectors(self.reportData.events, self.config)
         self.lr.setRegion([0,self.config.fightLength])
         self.threatGraph.resize(1010,360)
         self.threatGraph.move(180, 10)
         self.plot.setData(x, y)
-        self.totalTPS.setText("Threat per Second: " + str(self.data.totalTPS))
-        self.totalDPS.setText("Damage per Second: " + str(self.data.totalDPS))
+        self.totalTPS.setText("Threat per Second: " + str(self.reportData.totalTPS))
+        self.totalDPS.setText("Damage per Second: " + str(self.reportData.totalDPS))
         self.updateSelectedEvents(self.lr)
 
 if __name__ == "__main__":
