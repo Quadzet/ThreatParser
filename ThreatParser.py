@@ -40,7 +40,8 @@ class Ui_MainWindow(object):
                 abilityTuples.append([event.spellName, event.damage, event.threat])
                 totalThreat += event.threat
         self.abilityTable.setRowCount(len(abilityTuples)+1)
-        sorted(abilityTuples, key=lambda abilityTuples: abilityTuples[2])
+        threatValues = [item[2] for item in abilityTuples]
+        abilityTuples = [x for _, x in sorted(zip(threatValues,abilityTuples), key=lambda pair: -pair[0])]
         ix = 0
         for i in abilityTuples:
             self.abilityTable.setItem(ix, 0, QtWidgets.QTableWidgetItem(i[0]))

@@ -19,5 +19,4 @@ TODO:
  - Graph granularity option(s)
  - Dragging selection out of data should update table
  - Clear output when a new fetch is done
- - Fix table sorting
 
