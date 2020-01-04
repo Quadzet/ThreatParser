@@ -8,12 +8,13 @@ Enter your Warcraftlogs report ID, press Fetch.
 Select the options and the tank and boss to parse.  
 Voilá.  
 
-**Note:** Only threat on the actual boss counts, ie not on adds.
+**Notes:** 
+Only threat on the actual boss counts, ie not on adds.
+Only top ranks of abilities are registered.
 
 TODO:
  - More optimized GET from warcraftlogs
  - Filter non warrior tanks from player list
- - Rage gains, Gift of Arthas, battle shout
  - Manual selection input, button for snug fit
  - Graph granularity option(s)
  - Dragging selection out of data should update table

@@ -56,6 +56,7 @@ class Ui_MainWindow(object):
         self.abilityTable.resizeColumnsToContents()
         size = myGetQTableWidgetSize(self.abilityTable)
         size.setWidth(1010)
+        size.setHeight(min(340, size.height()))
         self.abilityTable.setFixedSize(size)
         return
 

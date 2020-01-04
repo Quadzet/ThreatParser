@@ -175,6 +175,37 @@ def parseApplyBuffEvent(event, config):
         config.stance = "Berserker Stance"
     elif spellID == 71:
         config.stance = "Defensive Stance"
+    elif spellID == 11551: # battle shout
+        timestamp = event["timestamp"]/1000
+        threat = 56*config.getThreatFactor(0) # Assuming only one enemy
+        spellName = event["ability"]["name"]
+        return threatEvent(timestamp, threat, 0, source, source, spellName)
+
+def parseDebuffEvent(event, config):
+    spellID = int(event["ability"]["guid"])
+    source = int(event["sourceID"])
+    if source != config.playerID:
+        return
+    targetID = event["targetID"]
+    if targetID != config.bossID:
+        return
+    if spellID == 11374: # Gift of Arthas
+        timestamp = event["timestamp"]/1000
+        threat = 90*config.getThreatFactor(spellID)
+        spellName = event["ability"]["name"]
+        return threatEvent(timestamp, threat, 0, targetID, source, spellName)
+
+def parseEnergizeEvent(event, config):
+    spellID = int(event["ability"]["guid"])
+    source = int(event["sourceID"])
+    if source != config.playerID:
+        return
+    else: # We know we gained rage
+        spellName = event["ability"]["name"]
+        timestamp = event["timestamp"]/1000
+        amount = event["resourceChange"] - event["waste"]
+        threat = amount*config.getThreatFactor(0) # Assuming only one enemy
+        return threatEvent(timestamp, threat, 0, source, source, spellName + " (Rage Gain)")
 
 def fetchFightInfo(config):
     url = "https://classic.warcraftlogs.com:443/v1/report/fights/" + config.reportID
@@ -240,7 +271,11 @@ def fetchEvents(reportData, config):
         elif event["type"] == "damage":
             threatInstance = parseDamageEvent(event, config)
         elif event["type"] == "applybuff":
-            parseApplyBuffEvent(event, config) # update config regarding stances
+            parseApplyBuffEvent(event, config) # update config regarding stances AND BATTLE SHOUT
+        elif event["type"] == "applydebuff" or event["type"] == "refreshdebuff":
+            threatInstance = parseDebuffEvent(event, config) # Gift of Arthas
+        elif event["type"] == "energize":
+            threatInstance = parseEnergizeEvent(event, config) # Rage Gains
         if threatInstance is None:
             continue
         else:
