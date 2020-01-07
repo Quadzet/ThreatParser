@@ -117,14 +117,16 @@ def parseDamageEvent(event, config):
         return
     spellID = int(event["ability"]["guid"])
     bonusThreat = 0
-    if spellID == 23925:
+    if spellID == 23925: # Shield Slam
         bonusThreat = 250
-    elif spellID == 11601:
+    elif spellID == 11601: # Revenge
         bonusThreat = 315
-    elif spellID == 11567:
+    elif spellID == 11567: # Heroic Strike
         bonusThreat = 145
     elif spellID == 11597: # Sunder Armor parry/miss/dodge shows up as damage, subtract threat since the cast has added it
         bonusThreat = -260 #261?
+    elif spellID  == 11581: # Thunder Clap
+        bonusThreat = 180
 
     timestamp = event["timestamp"]/1000
     threat = (damage+bonusThreat)*config.getThreatFactor(spellID)
@@ -191,13 +193,17 @@ def parseDebuffEvent(event, config):
     if source != config.playerID:
         return
     targetID = event["targetID"]
+    threat = 0
     if targetID != config.bossID:
         return
     if spellID == 11374: # Gift of Arthas
-        timestamp = event["timestamp"]/1000
-        threat = 90*config.getThreatFactor(spellID)
-        spellName = event["ability"]["name"]
-        return threatEvent(timestamp, threat, 0, targetID, source, spellName)
+        threat = 90
+    elif spellID == 11556: # Demoralizing Shout
+        threat = 42
+    threat *= config.getThreatFactor(spellID)
+    timestamp = event["timestamp"]/1000
+    spellName = event["ability"]["name"]
+    return threatEvent(timestamp, threat, 0, targetID, source, spellName)
 
 def parseEnergizeEvent(event, config):
     spellID = int(event["ability"]["guid"])
