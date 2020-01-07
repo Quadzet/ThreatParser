@@ -10,13 +10,3 @@ Voilá.
 Only threat on the actual boss counts, ie not on adds.
 Only top ranks of abilities are registered.
 
-TODO:
- - Trim python packages
- - Fix window sizing
- - More optimized GET from warcraftlogs
- - Filter non warrior tanks from player list
- - Manual selection input, button for snug fit
- - Graph granularity option(s)
- - Dragging selection out of data should update table
- - Clear output when a new fetch is done
-

@@ -1,9 +1,9 @@
-import numpy as np
-from scipy import interpolate
-import datetime
+
+from numpy import arange
+from scipy import interpolate, histogram
 from datetime import datetime
 import requests
-from requests import HTTPError
+from requests import HTTPError 
 
 class userConfig:
     reportID = ""
@@ -92,7 +92,7 @@ def generatePlotVectors(logEvents, config, detailLevel=0):
     for i in logEvents:
         timestampSeconds.append(i.timestamp - startTime)
         weights.append(i.threat)
-    n, x = np.histogram(timestampSeconds, range(0, round(config.fightLength + 2*detailLevel), detailLevel), weights=weights, density=False)
+    n, x = histogram(timestampSeconds, range(0, round(config.fightLength + 2*detailLevel), detailLevel), weights=weights, density=False)
     n2 = [0]
     x2 = [max(0, x[0] - detailLevel/5.)]
     for i in n:
@@ -105,7 +105,7 @@ def generatePlotVectors(logEvents, config, detailLevel=0):
     for i in range(0, len(x2)):
         dxdy.append(0)
     poly = interpolate.CubicHermiteSpline(x2, n2, dxdy)
-    xnew = np.arange(0, round(config.fightLength + detailLevel), 0.1)
+    xnew = arange(0, round(config.fightLength + detailLevel), 0.1)
     ynew = []
     for i in xnew:
         ynew.append(poly(i))
@@ -126,7 +126,7 @@ def parseDamageEvent(event, config):
     elif spellID == 11597: # Sunder Armor parry/miss/dodge shows up as damage, subtract threat since the cast has added it
         bonusThreat = -260 #261?
     elif spellID  == 11581: # Thunder Clap
-        bonusThreat = 180
+        bonusThreat = 130
 
     timestamp = event["timestamp"]/1000
     threat = (damage+bonusThreat)*config.getThreatFactor(spellID)
