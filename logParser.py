@@ -113,6 +113,8 @@ def generatePlotVectors(logEvents, config, detailLevel=0):
 
 def parseDamageEvent(event, config):
     damage = event["amount"]
+    if damage == 0:
+        return
     spellID = int(event["ability"]["guid"])
     bonusThreat = 0
     if spellID == 23925:
@@ -182,6 +184,8 @@ def parseApplyBuffEvent(event, config):
         return threatEvent(timestamp, threat, 0, source, source, spellName)
 
 def parseDebuffEvent(event, config):
+    if event["sourceIsFriendly"] == False:
+        return
     spellID = int(event["ability"]["guid"])
     source = int(event["sourceID"])
     if source != config.playerID:
